@@ -4,6 +4,7 @@ import displayio
 import rgbmatrix
 import framebufferio
 import random
+import gc
 
 from math import sin,pi,cos
 
@@ -65,7 +66,7 @@ for i in range(8):
 tile_grid = displayio.TileGrid(bitmap, pixel_shader=palette)
 
 
-target_fps = 7
+target_fps = 5
 ft = 1 / target_fps
 now = t0 = time.monotonic_ns()
 deadline = t0 + ft
@@ -96,12 +97,7 @@ def find_cells(x,y):
     n += cells[(x+1)&31][(y+1)&31]
     return n
 
-cells = list()
-for i in range(32):
-    row = []
-    for j in range(32):
-        row.append(0)
-    cells.append(row)
+cells = [[0 for a in range(32)] for b in range(32)]
 
 live_cells = [  (15,15),(16,15),(17,15),
                 (15,16),        (17,16),
@@ -110,6 +106,7 @@ live_cells = [  (15,15),(16,15),(17,15),
 for x,y in live_cells:
     cells[x][y] = 1
 
+mem_used = 0
 dead_cells = []
 timer = 0
 color = 0
@@ -119,14 +116,17 @@ while True:
     color += 1
     if color == 31 :
         color = 1
-    if timer <1000:
+    if timer <300: #300:
         for x,y in dead_cells:
             bitmap[x,y] = 0
             cells[x][y] = 0
 
         for x,y in live_cells:
             if bitmap[x,y] == 0:
-                bitmap[x,y] = color
+                d = color+(abs(x-16)+abs(y-16)) & 31
+                if d==0 or d==31:
+                    d=1
+                bitmap[x,y] = d #color
 
         dead_cells = []
 
@@ -150,7 +150,26 @@ while True:
         live_cells = new_live_cells.copy()
         for x,y in live_cells:
             cells[x][y] = 1
+    else:
+        for a in live_cells:
+            if a not in dead_cells:
+                dead_cells.append(a)
+        #dead_cells = dead_cells.extend(live_cells)
+        timer = 0
+        cells = [[0 for a in range(32)] for b in range(32)]
 
+        live_cells = [  (15,15),(16,15),(17,15),
+                        (15,16),        (17,16),
+                        (15,17),        (17,17)]
+
+        for x,y in live_cells:
+            cells[x][y] = 1
+
+
+    mem_used += gc.mem_free()
+    mem_used /= 2
+    if timer & 31 == 0:
+        print(mem_used)
         
     # fps code from the scrolling text with background image example
     display.refresh(target_frames_per_second=target_fps, minimum_frames_per_second=1)
